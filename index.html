@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Work Day Calendar</title>
+  
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Work Calendar">
+  
+  <!-- Embedded Manifest for PWA installation -->
+  <link rel="manifest" href='data:application/manifest+json,{
+    "name": "Work Day Calendar",
+    "short_name": "Work Cal",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#f8fafc",
+    "theme_color": "#2563eb",
+    "icons": [
+      {
+        "src": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\" fill=\"%232563eb\"><rect width=\"512\" height=\"512\" rx=\"100\" fill=\"%232563eb\"/><path d=\"M128 160h256v256H128z\" fill=\"white\"/></svg>",
+        "sizes": "192x192 512x512",
+        "type": "image/svg+xml"
+      }
+    ]
+  }'>
+
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --work-bg: #dcfce7;
+      --work-color: #166534;
+      --rest-bg: #f1f5f9;
+      --rest-color: #475569;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 16px; display: flex; justify-content: center; }
+    .container { max-width: 500px; width: 100%; display: flex; flex-direction: column; gap: 16px; }
+    
+    .card { background: var(--card-bg); border-radius: 12px; padding: 16px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    
+    /* Today's Status Banner */
+    .status-card { text-align: center; }
+    .status-card h2 { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .status-badge { display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 700; font-size: 1.25rem; }
+    .status-badge.work { background: var(--work-bg); color: var(--work-color); }
+    .status-badge.rest { background: var(--rest-bg); color: var(--rest-color); }
+
+    /* Calendar Controls */
+    .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .cal-header h3 { font-size: 1.1rem; font-weight: 600; }
+    .actions { display: flex; gap: 8px; }
+    .btn { background: var(--bg); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+    .btn:hover { background: var(--border); }
+
+    /* Calendar Grid Responsive Setup */
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+    .day-name { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); padding-bottom: 4px; }
+    .day-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 0.85rem; font-weight: 500; position: relative; }
+    .day-cell.empty { background: transparent; }
+    .day-cell.work { background: var(--work-bg); color: var(--work-color); }
+    .day-cell.rest { background: var(--rest-bg); color: var(--rest-color); }
+    .day-cell.today { outline: 2px solid var(--primary); outline-offset: -2px; font-weight: 700; }
+
+    /* Legend */
+    .legend { display: flex; justify-content: center; gap: 16px; margin-top: 16px; font-size: 0.85rem; color: var(--text-muted); }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot.work { background: var(--work-bg); }
+    .dot.rest { background: var(--rest-bg); }
+
+    /* Mobile Small Screen Enhancements */
+    @media (max-width: 380px) {
+      body { padding: 8px; }
+      .card { padding: 12px; }
+      .grid { gap: 2px; }
+      .day-cell { font-size: 0.75rem; border-radius: 4px; }
+      .btn { padding: 6px 10px; font-size: 0.85rem; }
+    }
+
+    /* Print Styles: Isolates the current month calendar */
+    @media print {
+      body { background: white; color: black; }
+      .status-card, .btn, .actions button:not(.print-legend) { display: none !important; }
+      .card { border: none; box-shadow: none; padding: 0; }
+      .cal-header { justify-content: center; margin-bottom: 24px; }
+      .cal-header h3 { font-size: 1.8rem; text-align: center; }
+      .grid { gap: 8px; }
+      .day-cell { border: 1px solid #ccc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Today's Status -->
+  <div class="card status-card">
+    <h2>Today's Work Status</h2>
+    <div id="today-status" class="status-badge">Loading...</div>
+  </div>
+
+  <!-- Calendar View -->
+  <div class="card">
+    <div class="cal-header">
+      <button class="btn" id="prev-month" aria-label="Previous Month">&lt;</button>
+      <h3 id="month-label">Month Year</h3>
+      <div class="actions">
+        <button class="btn" id="print-btn" title="Print Month">🖨️</button>
+        <button class="btn" id="next-month" aria-label="Next Month">&gt;</button>
+      </div>
+    </div>
+
+    <div class="grid" id="calendar-grid">
+      <!-- Days rendered via JavaScript -->
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="dot work"></span> Work Day</div>
+      <div class="legend-item"><span class="dot rest"></span> Rest Day</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Reference Start Date: Jan 1, 2026 (Day 0 of rotation = Work)
+  const REF_DATE = new Date(2026, 0, 1);
+  let currentDate = new Date();
+
+  function isWorkDay(date) {
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const start = new Date(REF_DATE.getFullYear(), REF_DATE.getMonth(), REF_DATE.getDate());
+    
+    const diffTime = target - start;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    const cycleDay = ((diffDays % 4) + 4) % 4;
+    return cycleDay === 0 || cycleDay === 1;
+  }
+
+  function renderTodayStatus() {
+    const today = new Date();
+    const statusEl = document.getElementById('today-status');
+    const works = isWorkDay(today);
+    
+    statusEl.textContent = works ? "Work Day" : "Rest Day";
+    statusEl.className = `status-badge ${works ? 'work' : 'rest'}`;
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById('calendar-grid');
+    const label = document.getElementById('month-label');
+    grid.innerHTML = '';
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    label.textContent = new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    weekdays.forEach(day => {
+      const el = document.createElement('div');
+      el.className = 'day-name';
+      el.textContent = day;
+      grid.appendChild(el);
+    });
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+
+    for (let i = 0; i < firstDayIndex; i++) {
+      const emptyCell = document.createElement('div');
+      emptyCell.className = 'day-cell empty';
+      grid.appendChild(emptyCell);
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const date = new Date(year, month, day);
+      const cell = document.createElement('div');
+      const works = isWorkDay(date);
+
+      cell.className = `day-cell ${works ? 'work' : 'rest'}`;
+      cell.textContent = day;
+
+      if (
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear()
+      ) {
+        cell.classList.add('today');
+      }
+
+      grid.appendChild(cell);
+    }
+  }
+
+  // Navigation & Print Event Listeners
+  document.getElementById('prev-month').addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderCalendar();
+  });
+
+  document.getElementById('next-month').addEventListener('click', () => {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderCalendar();
+  });
+
+  document.getElementById('print-btn').addEventListener('click', () => {
+    window.print();
+  });
+
+  // Initial Render
+  renderTodayStatus();
+  renderCalendar();
+
+  // Progressive Web App: Inline Service Worker Registration for Offline Capability
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE_NAME = 'work-cal-v1';
+      self.addEventListener('install', (e) => {
+        e.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => cache.addAll(['./']))
+        );
+      });
+      self.addEventListener('fetch', (e) => {
+        e.respondWith(
+          caches.match(e.request).then((res) => res || fetch(e.request))
+        );
+      });
+    `;
+    const blob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(blob);
+    
+    navigator.serviceWorker.register(swUrl).catch(err => {
+      console.error('Service Worker registration failed:', err);
+    });
+  }
+</script>
+
+</body>
+</html>
